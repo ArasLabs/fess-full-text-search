@@ -1,0 +1,3 @@
+<imports>
+  <package name="FessSearch Package" path="FessSearch Package\Import" />
+</imports>

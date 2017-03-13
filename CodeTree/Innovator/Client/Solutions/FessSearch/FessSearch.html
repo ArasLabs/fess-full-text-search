@@ -1,0 +1,135 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+	<title></title>
+	<link rel="stylesheet" type="text/css" href="../styles/default.css" />
+	<style type="text/css">
+		html, body
+		{
+			margin: 0;
+			padding: 0;
+			height: 100%;
+			border: none;
+		}
+	</style>
+	<script type="text/javascript" src="../../javascript/XmlDocument.js"></script>
+	<script type="text/javascript" src="../../javascript/AddConfigurationLink.js"></script>
+	<script type="text/javascript" src="../../javascript/search_mode.js"></script>
+	<script type="text/javascript" src="../../javascript/search_container.js"></script>
+	<script type="text/javascript" src="../../javascript/aml_validator.js"></script>
+	<script type="text/javascript" src="./jquery-1.8.0.min.js"></script>
+	<script type="text/javascript">
+
+	var retIds = "";
+	var resFlag = false;
+
+
+	// Fess検索および権限チェック処理
+	function fessSearch(){
+
+		retIds = "";
+		
+		$("#message").html("検索中...");
+		
+		// 検索文字列取得
+		var searchQuery = document.getElementById("key_word").value;
+
+		// Fess の URL
+		var baseUrl = "http://192.168.0.118:8080/fess/json?query=";
+		var timerID = null;
+		resFlag = false;
+		
+		// URL の構築
+		var urlBuf = [];
+		urlBuf.push(baseUrl, encodeURIComponent(searchQuery));
+		
+		// 検索リクエスト送信
+		$.ajax({
+			async: false,
+			url: urlBuf.join(""),
+			dataType: 'jsonp',
+			success: function(data) {
+				// 検索結果処理
+				var dataResponse = data.response;
+				var results = dataResponse.result;
+				for(i = 0, max = results.length; i < max; i++) {
+					if ( i > 0 ) { 
+						retIds += ","; 
+					}
+					retIds += convertUrl(results[i].urlLink);
+				}
+				resFlag = true;
+			},
+			dataFilter: function(data, type){
+				if(!data) {
+					resFlag = true;
+				}
+			}
+		})
+
+		// Arasの検索処理
+		function doArasSearch() {
+			if(resFlag) {
+				clearInterval(timerID);
+				$("#message").html("&nbsp;");
+				
+				// 検索結果のクリア
+				top.main.work.emptyGrid();
+				// ステータスバーへの設定
+				top.aras.showStatusMessage("page_status", top.aras.getResource('', 'search.n_items_found', '0'));
+
+				if(retIds == "") {
+					return;
+				}
+				// Aras検索実行
+				document.getElementById("fessIds").value = retIds;
+				top.main.work.doSearch();
+			}
+		}
+		
+		// Ajax処理の非同期対応
+		timerID = setInterval(doArasSearch, 1000);
+	}
+
+	// ArasのItemID抽出
+	function convertUrl(url) {
+		tempUrl = url.split("file://Z:/")
+		tempUrl2 = tempUrl[1].split("/");
+		return tempUrl2[1] + tempUrl2[2] + tempUrl2[3];
+	}
+	
+	</script>
+</head>
+<body>
+	<div id="part_number_container" name="part_number_container" class="sys_f_container sys_session_lang_direction_ltr sys_label_lang_direction_ltr sys_dt_string sys_p_is_required sys_ft_text sys_fn_name sys_pn_name "
+		style="top: 0px; left: 20px;">
+		<fieldset class="sys_f_border" style="border-width: 0px;">
+			<table class="sys_f_table">
+				<tbody class="sys_f_tbody">
+					<tr class="sys_f_tr">
+						<td class="sys_f_value_container sys_f_value_bottom ">
+							<div class="sys_f_value">
+								<table>
+									<tr>
+										<td class="sys_f_label_container sys_f_label_top ">
+											<div id="item_number_label" class="sys_f_label" style="font-family: arial, helvetica, sans-serif;
+												font-size: 8pt; font-weight: bold; color: #000000;">
+												Keyword</div>
+										</td>
+									</tr>
+									<tr>
+										<td><input type="text" id="key_word" /></td>
+										<td><input type="button" value="Search..." onclick="fessSearch()" /></td>
+										<td><p id="message" style="font-size: 10px;" />&nbsp;</td>
+									</tr>
+								</table>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</fieldset>
+	</div>
+	<input type="hidden" id="fessIds" />
+  </body>
+</html>

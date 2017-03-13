@@ -1,0 +1,206 @@
+﻿<AML>
+ <Item type="SearchMode" id="586C98C25A6942A1A62973858CAE3253" action="add">
+  <is_active>0</is_active>
+  <label xml:lang="en">Fess Search</label>
+  <name>FessSearch</name>
+  <search_handler>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"&gt;
+&lt;html&gt;
+   &lt;body&gt;
+       &lt;iframe id="cs_frame" FRAMEBORDER=0 SCROLLING ="auto" style="width:100%; height:200px;"&gt;
+       &lt;/iframe&gt;
+
+&lt;script type="text/javascript"&gt;
+    //these files must be called to load the JavaScripts for search
+    eval(top.aras.getFileText(top.aras.getBaseURL() + "/javascript/XmlDocument.js"));
+    eval(top.aras.getFileText(top.aras.getBaseURL() + "/javascript/AddConfigurationLink.js"));
+    eval(top.aras.getFileText(top.aras.getBaseURL() + "/javascript/search_mode.js"));
+    eval(top.aras.getFileText(top.aras.getBaseURL() + "/javascript/aml_validator.js"));
+
+    FessSearch.prototype = new SearchMode;  //declare the new search mode.  Name must equal name of search mode. No Spaces
+
+    function FessSearch(searchContainer)    //constructor for Custom Search.  Name equals name of SearchMode
+    {
+        // Call base SearchMode constructor
+        SearchMode.prototype.constructor.call(this, searchContainer, top.aras);
+        this.complexity=3;
+        this.isFileItemType = (searchContainer.itemTypeName &amp;&amp; searchContainer.itemTypeName == 'File');  //check for if File
+
+        //Verify that the File ItemType has the appropraitae properties
+        this.generateValidationInfo = function()
+        {
+            var validationInfo = new Object();
+            var fileItemType = top.aras.getItemTypeForClient("File");
+            if (fileItemType &amp;&amp; fileItemType.node)
+                fileItemType = fileItemType.node;
+            else
+                return undefined;
+
+            var idProp = fileItemType.selectSingleNode("Relationships/Item[@type='Property' and name='id']");
+            if (!idProp)
+            {
+                this.ValidationMsg = "File ItemType doesn't have 'id' property!";
+                return undefined;
+            }
+            validationInfo["Item[@type='File']/id"] = idProp;
+            return validationInfo;
+        }
+    }
+
+    //Base onStartSearchMode method for your new search item
+    FessSearch.prototype.onStartSearchMode = function FessSearchMode_onStartSearchMode(sContainer)
+    {
+        SearchMode.prototype.onStartSearchMode.call(this, sContainer);
+
+        if (this.toolbar &amp;&amp; this.toolbar.IsButtonVisible("add_criteria"))
+            this.toolbar.HideItem("add_criteria");
+
+        if (this.grid)
+            this.grid.ShowInputRow(false);
+
+        var containerHeight = '90px';
+        // Current search mode developed especially for File ItemType.
+        if (!this.isFileItemType)
+        {
+            top.aras.AlertError("This search is specific to the File ItemType");  //Alert user this search is for File itemtype only
+            containerHeight = '10px';
+        }
+        else  //if File ItemType load custom html in iframe
+        {
+            var fileItemType = top.aras.getItemTypeForClient("File");
+            if (fileItemType)
+            {
+                if (!document.frames["cs_frame"]) return;
+                var urlBase = top.aras.getBaseURL();
+                document.getElementById("cs_frame").src = urlBase+"/Solutions/FessSearch/fesssearch.html";
+            }
+        }
+        this.searchContainer.setStyleAttribute('height', containerHeight);  //set teh container height of the search frame
+        this.searchContainer.setStyleAttribute('display', '');
+    }
+
+    FessSearch.prototype.clearSearchCriteria = function FessSearch_clearSearchCriteria()  //clear search criteria using "clear search criteria" button in toolbar
+    {
+        var csFrame = document.getElementById("cs_frame").contentWindow.document;
+        if (this.isFileItemType)
+        {
+            this.currQryItem.removeItemAttribute("where");
+            this.currQryItem.removeItemAttribute("order_by");
+            csFrame.getElementById("fessIds").value = "";
+        }
+    }
+
+    //Set the AML for search based upon search criteria provided
+    FessSearch.prototype.setAml = function FessSearchMode_setAml(searchAML)
+    {
+        // Call base initSearch method.
+        SearchMode.prototype.setAml.call(this, searchAML);
+
+        this.currQryItem.item.removeAttribute("where");
+
+        var json_result;
+        try
+        {
+            json_result = top.aras.CriteriaConverter.AmlToSimple(searchAML);
+        }
+        catch (err)
+        {
+            json_result = undefined;
+        }
+        var propList = eval(json_result);
+
+        //[xpath][name][value][condition]
+        //xpath - Item[@type='File']/related_id
+        var xpath_num = 0;
+        var name_num = 1;
+        var value_num = 2;
+
+        setPropetyValue("Item[@type='File']/id", "id");
+
+        //Sample to set the property values from previous searh (not Implemented)
+        function setPropetyValue(propXPath, fieldName)
+        {
+            var valueToSet = "";
+            if (propList)
+            {
+                for (var propIndex = 0; propIndex &lt; propList.length; propIndex++)
+                {
+                    if (propList[propIndex][xpath_num] === propXPath)
+                    {
+                        valueToSet = propList[propIndex][value_num];
+                        break;
+                    }
+                }
+            }
+            if (!valueToSet)
+                valueToSet = "";
+        }
+    }
+
+    //Set your search criteria based upon data received from getAML
+    FessSearch.prototype.setSearchCriteria = function FessSearchMode_setSearchCriteria(propXpath, criteria, condition)
+    {
+        if (!criteria)
+            return;
+
+        var nodeName = propXpath.split("/");
+        var nodeTemplate = this.currQryItem.dom.createElement(nodeName[nodeName.length - 1]);
+        nodeTemplate.setAttribute("condition", condition);
+
+        var inner_aml = top.aras.CriteriaConverter.SimpleToAml(criteria, nodeTemplate.xml);
+
+        if (!inner_aml)
+        {
+            return;
+        }
+
+        var domToAml = top.aras.createXMLDocument();
+        domToAml.loadXML(inner_aml);
+
+        var path = "";
+        for (var i = 0; i &lt; nodeName.length - 1; i++)
+        {
+            path += nodeName[i];
+            if (i + 1 != nodeName.length - 1)
+            {
+                path += "/";
+            }
+        }
+        var targetNode = this.currQryItem.dom.selectSingleNode(path);
+
+        if (targetNode)
+        {
+            if (domToAml.documentElement)
+            {
+                targetNode.appendChild(domToAml.documentElement);
+            }
+        }
+        else
+        {
+            var critNd = this._createItemByXPath(path);
+            critNd.appendChild(domToAml.documentElement);
+        }
+    }
+
+    //get the AMl from the custom search HTML
+    FessSearch.prototype.getAml = function FessSearchMode_getAml()
+    {
+        var csFrame = document.getElementById("cs_frame").contentWindow.document;
+        if (this.isFileItemType)
+        {
+            this.currQryItem.removeAllCriterias();
+            if (SearchMode.prototype.getAml.call(this) == undefined)
+                return undefined;
+
+            var condition = (top.aras.getPreferenceItemProperty("Core_GlobalLayout", null, "core_use_wildcards") == "true" ? "like" : "eq");
+            
+            //Set teh AML values for your search
+            this.setSearchCriteria("Item[@type='File']/id", csFrame.getElementById("fessIds").value, "in");
+        }
+        return this.currQryItem.item.xml;
+    }
+    &lt;/script&gt;
+ &lt;/body&gt;
+&lt;/html&gt;
+</search_handler>
+ </Item>
+</AML>
